@@ -65,6 +65,7 @@ DEFINE_string(raftSnapshotUri, "curve://./0/copysets", "raft snapshot uri");
 DEFINE_string(raftLogUri, "curve://./0/copysets", "raft log uri");
 DEFINE_string(recycleUri, "local://./0/recycler" , "recycle uri");
 DEFINE_string(chunkFilePoolDir, "./0/", "chunk file pool location");
+DEFINE_uint32(chunkFillPoolPercent, 10, "format percent for chunkfillpool");
 DEFINE_string(chunkFilePoolMetaPath,
     "./chunkfilepool.meta", "chunk file pool meta path");
 DEFINE_string(logPath, "./0/chunkserver.log-", "log file path");
@@ -479,8 +480,6 @@ void ChunkServer::Stop() {
     brpc::AskToQuit();
 }
 
-
-
 void ChunkServer::InitChunkFilePoolOptions(
     common::Configuration *conf, FilePoolOptions *chunkFilePoolOptions) {
     LOG_IF(FATAL, !conf->GetUInt32Value("global.chunk_size",
@@ -513,6 +512,21 @@ void ChunkServer::InitChunkFilePoolOptions(
             "chunkfilepool.meta_path", &metaUri));
         ::memcpy(
             chunkFilePoolOptions->metaPath, metaUri.c_str(), metaUri.size());
+        
+        std::string chunkFilePoolUri;
+        LOG_IF(FATAL, !conf->GetStringValue(
+            "chunkfilepool.chunk_file_pool_dir", &chunkFilePoolUri));
+        // just for test
+        chunkFilePoolUri.append("/chunks");
+        
+        ::memcpy(chunkFilePoolOptions->filePoolDir,
+                 chunkFilePoolUri.c_str(),
+                 chunkFilePoolUri.size());
+        
+        chunkFilePoolOptions->allocateByPercent = true;
+        LOG_IF(FATAL, !conf->GetUInt32Value("chunkfilepool.chunk_file_pool_format_percent", 
+            &chunkFilePoolOptions->allocateByPercent));
+
         LOG_IF(FATAL, !conf->GetBoolValue("chunkfilepool.clean.enable",
             &chunkFilePoolOptions->needClean));
         LOG_IF(FATAL, !conf->GetUInt32Value("chunkfilepool.clean.bytes_per_write",  // NOLINT
@@ -828,6 +842,14 @@ void ChunkServer::LoadConfigFromCmdline(common::Configuration *conf) {
         !info.is_default) {
         conf->SetStringValue(
             "chunkfilepool.chunk_file_pool_dir", FLAGS_chunkFilePoolDir);
+    } else {
+        LOG(FATAL)
+        << "chunkFilePoolDir must be set when run chunkserver in command.";
+    }
+
+    if (GetCommandLineFlagInfo("chunkFillPoolPercent", &info)) {
+        conf->SetStringValue(
+            "chunkfilepool.chunk_file_pool_dir", FLAGS_chunkFillPoolPercent);
     } else {
         LOG(FATAL)
         << "chunkFilePoolDir must be set when run chunkserver in command.";

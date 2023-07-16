@@ -65,6 +65,10 @@ struct FilePoolOptions {
     // retry times for get file
     uint16_t    retryTimes;
 
+    bool allocateByPercent;
+    uint32_t preAllocateNum;
+    uint32_t allocatePercent;
+
     FilePoolOptions() {
         getFileFromPool = true;
         needClean = false;
@@ -74,7 +78,13 @@ struct FilePoolOptions {
         fileSize = 0;
         metaPageSize = 0;
         retryTimes = 5;
+<<<<<<< HEAD
         blockSize = 0;
+=======
+        allocateByPercent = false;
+        preAllocateNum = 0;
+        allocatePercent = 0;
+>>>>>>> Chunk pool format asyn
         ::memset(metaPath, 0, 256);
         ::memset(filePoolDir, 0, 256);
     }
@@ -125,6 +135,13 @@ struct FilePoolMeta {
 
     uint32_t Crc32() const;
 };
+
+typedef struct ChunkFormatStat {
+    std::atomic<uint32_t> allocateChunkNum;
+    std::atomic<uint32_t> runningThreadNum;
+    uint32_t allocateMaxIndex;
+    uint32_t preAllocateNum;
+} ChunkFormatStat_t;
 
 class FilePoolHelper {
  public:
@@ -241,8 +258,10 @@ class CURVE_CACHELINE_ALIGNMENT FilePool {
     // Traverse the pre-allocated chunk information from the
     // chunkfile pool directory
     bool ScanInternal();
-    // Check whether the chunkfile pool pre-allocation is legal
-    bool CheckValid();
+    // Prepare for format.
+    bool PrepareFormat();
+    // Check whether pool file is legal.
+    bool CheckPoolFile(const std::string& file); 
     /**
      * Perform metapage assignment for the new chunkfile
      * @param: sourcepath is the file path to be written
@@ -281,6 +300,8 @@ class CURVE_CACHELINE_ALIGNMENT FilePool {
      * @return: Return true if clean chunk success, otherwise retrun false
      */
     bool CleaningChunk();
+
+    int FormatWorker();
 
     /**
      * @brief: The function of thread for cleaning chunk
@@ -330,6 +351,14 @@ class CURVE_CACHELINE_ALIGNMENT FilePool {
 
     // The throttle iops for cleaning chunk (4KB/IO)
     Throttle cleanThrottle_;
+
+    //
+    Thread formatThread_;
+
+    InterruptibleSleeper formatSleeper_;
+
+    //
+    ChunkFormatStat formatStat_;
 
     // Sleeper for cleaning chunk thread
     InterruptibleSleeper cleanSleeper_;
